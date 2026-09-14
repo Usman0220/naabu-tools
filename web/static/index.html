@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>naabu-web</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2128; --border:#30363d;
+  --fg:#e6edf3; --dim:#8b949e; --accent:#58a6ff; --green:#3fb950; --red:#f85149; --amber:#d29922;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+header{padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;position:sticky;top:0}
+header h1{font-size:15px;margin:0}
+.header-status{color:var(--dim)}
+.layout{display:grid;grid-template-columns:260px 1fr;gap:12px;padding:12px;max-width:1400px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px;color:var(--dim)}
+label{display:block;color:var(--dim);margin:6px 0 3px}
+input,select,textarea{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--fg);padding:6px 8px;font-family:inherit;font-size:13px}
+textarea{resize:vertical;min-height:120px}
+button{background:var(--panel2);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:7px 12px;cursor:pointer;font-family:inherit}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#0d1117;font-weight:600}
+button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.chip{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--panel2);color:var(--dim)}
+.chip.green{color:var(--green)} .chip.red{color:var(--red)} .chip.blue{color:var(--accent)} .chip.amber{color:var(--amber)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--dim);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--panel)}
+td{padding:5px 8px;border-bottom:1px solid var(--panel2)}
+tr:hover td{background:var(--panel2)}
+.mono{color:var(--accent)}
+.scroll{max-height:420px;overflow:auto}
+.bar{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:6px}
+.bar>div{height:100%;background:var(--green);width:0;transition:width .3s}
+.live{color:var(--green)}
+.empty{color:var(--dim);padding:20px;text-align:center}
+.dir-empty{color:var(--dim);font-size:11px;padding:4px}
+.err{color:var(--red)}
+.preset{font-size:11px;padding:3px 8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>naabu-web</h1>
+  <span class="header-status" id="naabuStatus">checking naabu…</span>
+  <span class="chip" id="scanState">idle</span>
+  <span style="flex:1"></span>
+  <span id="statusMsg" class="dim" style="color:var(--dim)"></span>
+</header>
+
+<div class="layout">
+  <!-- LEFT -->
+  <div>
+    <div class="card">
+      <h2>IP Generator</h2>
+      <label>Count</label>
+      <div class="row">
+        <input id="genCount" type="number" value="10" min="1" max="10000" style="flex:1">
+        <button id="genBtn" class="primary">Generate</button>
+      </div>
+      <label>Expand CIDR (e.g. 8.8.8.0/30)</label>
+      <div class="row">
+        <input id="cidrInput" placeholder="x.x.x.x/prefix" style="flex:1">
+        <button id="cidrBtn">Expand</button>
+      </div>
+      <div id="reservedNote" class="dir-empty"></div>
+    </div>
+
+    <div class="card">
+      <h2>Scan Settings</h2>
+      <label>Ports</label>
+      <input id="ports" value="80,443,8080,8443,22,21,25,53,110,143,993,995,3306,5432,6379,8000,8888,9090">
+      <div class="row">
+        <button class="preset" data-p="80,443,8080,8443,8000,8888,3000,5000,9090">Web</button>
+        <button class="preset" data-p="25,110,143,465,587,993,995">Mail</button>
+        <button class="preset" data-p="3306,5432,6379,27017,1433,1521,9042">DB</button>
+        <button class="preset" data-p="22,23,3389,5900,5901,6000">Remote</button>
+      </div>
+      <label>Rate (pps)</label><input id="rate" type="number" value="500">
+      <label>Threads</label><input id="threads" type="number" value="25">
+      <label>Timeout (ms)</label><input id="timeout" type="number" value="5000">
+      <div class="row" style="margin-top:10px">
+        <select id="scanType" style="flex:1">
+          <option value="connect">Connect scan</option>
+          <option value="syn">SYN scan</option>
+          <option value="auto">Auto</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="verify" checked style="width:auto"> verify</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div>
+    <div class="card">
+      <h2>Targets & Scan</h2>
+      <textarea id="ips" placeholder="One IP or CIDR per line..."></textarea>
+      <div class="row">
+        <button id="startBtn" class="primary">▶ Start Scan</button>
+        <button id="copyBtn">Copy IPs</button>
+        <span id="ipCount" class="chip"></span>
+      </div>
+      <div class="bar" id="progBar" style="display:none"><div id="progFill"></div></div>
+    </div>
+
+    <div class="card">
+      <h2>Results <span id="resultCount" class="chip"></span></h2>
+      <div class="row" style="margin-bottom:8px">
+        <input id="filterIp" placeholder="filter IP" style="width:160px">
+        <input id="filterSvc" placeholder="filter service" style="width:140px">
+        <button id="exportBtn">Export</button>
+        <select id="exportFmt" style="width:110px">
+          <option value="txt">txt</option><option value="csv">csv</option><option value="json">json</option>
+        </select>
+        <span class="chip" id="jobIdChip"></span>
+      </div>
+      <div class="scroll" id="resultsWrap">
+        <table id="resultsTable">
+          <thead><tr><th>IP</th><th>Port</th><th>Proto</th><th>Service</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty" id="resultsEmpty">No results yet. Start a scan.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>History</h2>
+      <div id="historyWrap"><div class="empty">No scans yet.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let activeJob = null;
+let pollTimer = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+
+async function init() {
+  try {
+    const s = await api('/api/naabu/check');
+    $('naabuStatus').textContent = '● ' + s.status;
+    $('naabuStatus').style.color = s.status === 'ok' ? 'var(--green)' : 'var(--red)';
+  } catch { $('naabuStatus').textContent = '● naabu error'; $('naabuStatus').style.color = 'var(--red)'; }
+
+  try {
+    const g = await api('/api/ipgen/random?count=1');
+    const ranges = (g.reserved_ranges || []).slice(0, 6)
+      .map(r => `${r[0]} reserved`).join(' · ');
+    $('reservedNote').textContent = 'reserved ranges excluded: ' + ranges;
+  } catch {}
+
+  refreshHistory();
+}
+
+// --- IP generation ---
+$('genBtn').onclick = async () => {
+  const count = Math.min(10000, Math.max(1, parseInt($('genCount').value) || 10));
+  $('genBtn').disabled = true;
+  const g = await api(`/api/ipgen/random?count=${count}`);
+  $('ips').value = g.ips.join('\n');
+  $('genBtn').disabled = false;
+  setMsg(`generated ${g.ips.length} random public IPs`);
+  countIps();
+};
+
+$('cidrBtn').onclick = async () => {
+  const cidr = $('cidrInput').value.trim();
+  if (!cidr) return;
+  const r = await fetch('/api/ipgen/cidr', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({text: cidr})
+  });
+  const j = await r.json();
+  if (j.error) { setMsg('cidr error: ' + j.error, true); return; }
+  $('ips').value += ($('ips').value ? '\n' : '') + j.ips.join('\n');
+  setMsg(`expanded ${cidr} → ${j.count} IPs`);
+  countIps();
+};
+
+$('copyBtn').onclick = async () => {
+  await navigator.clipboard.writeText($('ips').value);
+  setMsg('copied to clipboard');
+};
+
+function countIps() {
+  const lines = $('ips').value.split('\n').map(s => s.trim()).filter(Boolean);
+  $('ipCount').textContent = `${lines.length} target${lines.length === 1 ? '' : 's'}`;
+}
+$('ips').oninput = countIps;
+
+// --- presets ---
+document.querySelectorAll('.preset').forEach(b => {
+  b.onclick = () => { $('ports').value = b.dataset.p; };
+});
+
+// --- scan lifecycle ---
+$('startBtn').onclick = async () => {
+  const lines = $('ips').value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!lines.length) { setMsg('add target IPs first', true); return; }
+
+  let ips = [];
+  for (const l of lines) {
+    if (l.includes('/')) {
+      try {
+        const r = await fetch('/api/ipgen/cidr', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text:l})});
+        const j = await r.json();
+        if (j.error) { setMsg('cidr error: ' + j.error, true); return; }
+        ips = ips.concat(j.ips);
+      } catch(e) { setMsg('cidr error: '+e, true); return; }
+    } else {
+      ips.push(l);
+    }
+  }
+
+  const body = {
+    ips,
+    settings: {
+      port_range: $('ports').value.trim(),
+      rate_limit: parseInt($('rate').value) || 500,
+      threads: parseInt($('threads').value) || 25,
+      timeout: parseInt($('timeout').value) || 5000,
+      scan_type: $('scanType').value,
+      verify: $('verify').checked,
+      use_top_ports: false,
+      top_ports_count: 100
+    }
+  };
+
+  try {
+    const r = await fetch('/api/scans', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const j = await r.json();
+    activeJob = j.id;
+    $('jobIdChip').textContent = `job #${j.id}`;
+    $('progBar').style.display = 'block';
+    $('scanState').textContent = 'scanning';
+    $('scanState').className = 'chip blue';
+    startPoll();
+  } catch(e) { setMsg('failed to start scan: ' + e, true); }
+};
+
+function stopPoll() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+function startPoll() {
+  stopPoll();
+  poll();
+  pollTimer = setInterval(poll, 1200);
+}
+
+async function poll() {
+  if (!activeJob) return;
+  try {
+    const job = await api(`/api/scans/${activeJob}`);
+    renderJob(job);
+
+    if (job.status === 'Completed' || job.status === 'Error') {
+      stopPoll();
+      $('scanState').textContent = job.status.toLowerCase();
+      $('scanState').className = 'chip ' + (job.status === 'Completed' ? 'green' : 'red');
+      $('progFill').style.width = '100%';
+      setMsg(job.status === 'Completed' ? `scan complete — ${job.results.length} open ports` : 'scan error', job.status === 'Error');
+      refreshHistory();
+    }
+  } catch {}
+}
+
+function renderJob(job) {
+  const newTotal = job.results.length;
+  const prev = $('resultsTable').dataset.found || 0;
+  const hasNew = newTotal > prev;
+  $('resultCount').textContent = newTotal;
+  $('jobIdChip').textContent = `job #${job.id} · ${job.status}`;
+
+  const msg = newTotal ? (hasNew ? `scanning… ${newTotal} open port(s)` : `scanning… ${newTotal} open ports`) : 'scanning…';
+  setMsg(msg);
+
+  if (hasNew) renderResults(job, false);
+  $('resultsTable').dataset.found = newTotal;
+}
+
+function renderResults(job, full) {
+  const tbody = $('resultsTable').querySelector('tbody');
+  const filtIp = $('filterIp').value.toLowerCase();
+  const filtSvc = $('filterSvc').value.toLowerCase();
+  const rows = job.results
+    .filter(r => (!filtIp || r.ip.includes(filtIp)) && (!filtSvc || r.service.toLowerCase().includes(filtSvc)));
+
+  if (full || tbody.children.length === 0 || job.results.length === 0) tbody.innerHTML = '';
+
+  for (const r of rows) {
+    const tr = document.createElement('tr');
+    const svcClass = ['SSH','HTTP','HTTPS','SMB','RDP','MySQL','Redis'].includes(r.service) ? 'class="live"' : '';
+    tr.innerHTML = `<td class="mono">${r.ip}</td><td>${r.port}</td><td>${r.protocol}</td><td ${svcClass}>${r.service}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+$('filterIp').oninput = refreshResults;
+$('filterSvc').oninput = refreshResults;
+async function refreshResults() {
+  if (!activeJob) return;
+  try { renderResults(await api(`/api/scans/${activeJob}`), true); } catch {}
+}
+
+// --- export ---
+$('exportBtn').onclick = async () => {
+  if (!activeJob) { setMsg('no job to export', true); return; }
+  const fmt = $('exportFmt').value;
+  const a = document.createElement('a');
+  a.href = `/api/scans/${activeJob}/export?format=${fmt}`;
+  a.download = '';
+  a.click();
+};
+
+// --- history ---
+async function refreshHistory() {
+  try {
+    const d = await api('/api/scans');
+    const wrap = $('historyWrap');
+    if (!d.jobs.length) { wrap.innerHTML = '<div class="empty">No scans yet.</div>'; return; }
+    wrap.innerHTML = d.jobs.map(j =>
+      `<div class="row" style="margin:6px 0">
+        <button onclick="loadJob(${j.id})" title="view results">#${j.id}</button>
+        <span class="chip ${j.status === 'Completed' ? 'green' : j.status === 'Error' ? 'red' : 'blue'}">${j.status}</span>
+        <span class="chip">${j.found} open</span>
+        <span class="chip">${j.total_ips} IPs</span>
+        <span style="color:var(--dim);font-size:11px">${j.ports.slice(0, 40)}…</span>
+      </div>`).join('');
+  } catch {}
+}
+
+window.loadJob = async (id) => {
+  activeJob = id;
+  stopPoll();
+  $('jobIdChip').textContent = `job #${id}`;
+  const job = await api(`/api/scans/${id}`);
+  renderResults(job, true);
+  $('resultCount').textContent = job.results.length;
+  setMsg(`loaded job #${id} — ${job.results.length} open ports`);
+  if (job.status === 'Running') startPoll();
+};
+
+// --- misc ---
+function setMsg(text, isErr = false) {
+  const el = $('statusMsg');
+  el.textContent = text;
+  el.style.color = isErr ? 'var(--red)' : 'var(--dim)';
+}
+
+init();
+</script>
+</body>
+</html>
